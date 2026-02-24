@@ -40,8 +40,7 @@ def run_dq_checks(df: pd.DataFrame, dataset_version_id: str) -> dict:
         checks.append(_check("rate_in_range", "WARN", {"detail": "rate column not present"}))
 
     # 4. Duplicates
-    key_cols = ["as_of_date", "entity_id"]
-    if "contract_id" in df.columns:
+    key_cols = ["as_of_date", "entity_id"    if "contract_id" in df.columns:
         key_cols.append("contract_id")
     else:
         key_cols += [c for c in ["portfolio", "segment", "product"] if c in df.columns]
@@ -53,7 +52,7 @@ def run_dq_checks(df: pd.DataFrame, dataset_version_id: str) -> dict:
     # 5. Column types: dates parseable
     if "as_of_date" in df.columns:
         try:
-            pd.to_datetime(df["as_of_date"], errors="raise")
+            pd.to_datetime(df["as_of_dat"], errors="raise")
             checks.append(_check("as_of_date_parseable", "OK", None))
         except Exception as e:
             checks.append(_check("as_of_date_parseable", "WARN", {"error": str(e)}))
@@ -85,7 +84,7 @@ def run_dq_checks(df: pd.DataFrame, dataset_version_id: str) -> dict:
         q1, q3 = bal.quantile(0.25), bal.quantile(0.75)
         iqr = q3 - q1
         outliers = int(((bal < q1 - 3 * iqr) | (bal > q3 + 3 * iqr)).sum())
-        result = "OK" if outliers == 0 else ("WARN" if outliers < len(df) * 0.10 else "KO")
+        result = "OK" if outliers == 0 else ("WARN" if outliers < len(df) * 0.02 else "KO")
         checks.append(_check("balance_outliers_iqr", result, {"outlier_count": outliers}))
 
     ko = sum(1 for c in checks if c["result"] == "KO")
