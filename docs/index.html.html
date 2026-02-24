@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>N-BeMod — Behavioural Model Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #070707;
+    --bg-2: #0C0C0C;
+    --bg-3: #121212;
+    --border: #1A1A1A;
+    --border-bright: #252525;
+    --text: #D8D8D8;
+    --text-muted: #505050;
+    --text-dim: #383838;
+    --accent: #00C2FF;
+    --accent-dim: rgba(0,194,255,0.08);
+    --accent-dim2: rgba(0,194,255,0.15);
+    --green: #00E87A;
+    --green-dim: rgba(0,232,122,0.08);
+    --amber: #FFB800;
+    --amber-dim: rgba(255,184,0,0.08);
+    --red: #FF3B3B;
+    --red-dim: rgba(255,59,59,0.08);
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  html, body { height: 100%; font-family: var(--sans); background: var(--bg); color: var(--text); }
+
+  /* Layout */
+  .shell { display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 200px; min-width: 200px; background: var(--bg-2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 0;
+  }
+  .logo-block {
+    padding: 1.5rem 1.25rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo-name {
+    font-family: var(--sans); font-weight: 700; font-size: 1rem;
+    color: #fff; letter-spacing: 3px; text-transform: uppercase;
+  }
+  .logo-sub {
+    font-family: var(--mono); font-size: 0.55rem; color: var(--text-dim);
+    letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px;
+  }
+  .nav { flex: 1; padding: 1rem 0; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0.65rem 1.25rem; cursor: pointer;
+    font-family: var(--mono); font-size: 0.7rem; color: var(--text-muted);
+    letter-spacing: 0.5px; transition: all 0.12s;
+    border-left: 2px solid transparent;
+    text-transform: uppercase;
+  }
+  .nav-item:hover { color: var(--text); background: var(--bg-3); }
+  .nav-item.active {
+    color: var(--accent); background: var(--accent-dim);
+    border-left-color: var(--accent);
+  }
+  .nav-num { color: var(--text-dim); font-size: 0.6rem; }
+  .sidebar-footer {
+    padding: 1rem 1.25rem; border-top: 1px solid var(--border);
+  }
+  .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 6px; }
+  .status-label { font-family: var(--mono); font-size: 0.62rem; color: var(--text-muted); }
+  .version-tag { font-family: var(--mono); font-size: 0.58rem; color: var(--text-dim); margin-top: 4px; }
+
+  /* Main content */
+  .main { flex: 1; overflow-y: auto; background: var(--bg); }
+
+  /* Top bar */
+  .topbar {
+    height: 48px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2rem; position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  .breadcrumb { font-family: var(--mono); font-size: 0.7rem; color: var(--text-muted); }
+  .breadcrumb span { color: var(--accent); }
+  .topbar-actions { display: flex; gap: 0.75rem; align-items: center; }
+  .btn-ghost {
+    font-family: var(--mono); font-size: 0.68rem; color: var(--text-muted);
+    background: none; border: 1px solid var(--border);
+    padding: 4px 12px; cursor: pointer; letter-spacing: 0.5px;
+    transition: all 0.12s; border-radius: 1px;
+  }
+  .btn-ghost:hover { border-color: var(--border-bright); color: var(--text); }
+  .btn-primary {
+    font-family: var(--mono); font-size: 0.68rem; font-weight: 600;
+    background: var(--accent); color: #000; border: none;
+    padding: 5px 14px; cursor: pointer; letter-spacing: 0.5px;
+    transition: all 0.12s; border-radius: 1px;
+  }
+  .btn-primary:hover { background: #33CFFF; transform: translateY(-1px); }
+
+  /* Page */
+  .page { display: none; padding: 2rem; }
+  .page.active { display: block; }
+
+  .page-title { font-weight: 700; font-size: 1.1rem; color: #fff; letter-spacing: -0.3px; }
+  .page-sub { font-family: var(--mono); font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1.5rem; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; }
+
+  /* Panels */
+  .panel {
+    background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: 2px; padding: 1.25rem;
+  }
+  .panel-title {
+    font-family: var(--mono); font-size: 0.62rem; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1rem;
+    padding-bottom: 0.6rem; border-bottom: 1px solid var(--border);
+  }
+
+  /* Metrics */
+  .metric { padding: 1rem; background: var(--bg-2); border: 1px solid var(--border); border-radius: 2px; }
+  .metric-val { font-family: var(--mono); font-size: 1.4rem; color: var(--accent); font-weight: 600; }
+  .metric-label { font-family: var(--mono); font-size: 0.58rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 4px; }
+  .metric-delta { font-family: var(--mono); font-size: 0.6rem; color: var(--green); margin-top: 2px; }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 0.62rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 1px; letter-spacing: 0.5px;
+  }
+  .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+  .badge.ok { background: var(--green-dim); color: var(--green); }
+  .badge.ok::before { background: var(--green); }
+  .badge.warn { background: var(--amber-dim); color: var(--amber); }
+  .badge.warn::before { background: var(--amber); }
+  .badge.ko { background: var(--red-dim); color: var(--red); }
+  .badge.ko::before { background: var(--red); }
+  .badge.queued { background: var(--accent-dim); color: var(--accent); }
+  .badge.queued::before { background: var(--accent); animation: pulse 1.5s infinite; }
+
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+  /* Form elements */
+  .form-label { font-family: var(--mono); font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: block; }
+  .form-input {
+    width: 100%; background: var(--bg-3); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 0.8rem;
+    padding: 8px 12px; outline: none; border-radius: 1px;
+    transition: border-color 0.12s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .form-group { margin-bottom: 1rem; }
+  .form-select {
+    width: 100%; background: var(--bg-3); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 0.78rem;
+    padding: 8px 12px; outline: none; border-radius: 1px; cursor: pointer;
+    transition: border-color 0.12s; appearance: none;
+  }
+  .form-select:focus { border-color: var(--accent); }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 1px dashed var(--border-bright); border-radius: 2px;
+    padding: 2rem; text-align: center; cursor: pointer;
+    transition: all 0.15s; background: var(--bg-3);
+  }
+  .upload-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+  .upload-icon { font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.5; }
+  .upload-label { font-family: var(--mono); font-size: 0.7rem; color: var(--text-muted); }
+
+  /* Table */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table thead th {
+    font-family: var(--mono); font-size: 0.6rem; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1.5px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    text-align: left; font-weight: 600;
+  }
+  .data-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .data-table tbody tr:hover { background: var(--bg-3); }
+  .data-table tbody td { font-family: var(--mono); font-size: 0.72rem; color: var(--text); padding: 9px 12px; }
+  .data-table tbody td.muted { color: var(--text-muted); }
+
+  /* Chart placeholder */
+  .chart-area { background: var(--bg-3); border: 1px solid var(--border); border-radius: 2px; position: relative; overflow: hidden; }
+
+  /* Minibar (DQ check) */
+  .dq-row { display: flex; align-items: center; gap: 0.75rem; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .dq-name { font-family: var(--mono); font-size: 0.68rem; color: var(--text-muted); flex: 1; }
+  .dq-bar-wrap { width: 80px; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+  .dq-bar { height: 100%; border-radius: 2px; }
+  .dq-bar.ok { background: var(--green); }
+  .dq-bar.warn { background: var(--amber); }
+  .dq-bar.ko { background: var(--red); }
+
+  /* Segment blocks */
+  .seg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+  .seg-card { background: var(--bg-3); border: 1px solid var(--border); border-radius: 2px; padding: 0.75rem; }
+  .seg-name { font-family: var(--mono); font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .seg-cpr { font-family: var(--mono); font-size: 1rem; color: var(--accent); font-weight: 600; }
+  .seg-bal { font-family: var(--mono); font-size: 0.62rem; color: var(--text-dim); margin-top: 2px; }
+
+  /* Timeline / run status */
+  .timeline { position: relative; padding-left: 1.5rem; }
+  .timeline::before { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1px; background: var(--border); }
+  .tl-step { position: relative; padding: 0.5rem 0; }
+  .tl-step::before {
+    content: ''; position: absolute; left: -1.45rem; top: 0.6rem;
+    width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--border-bright);
+    background: var(--bg-2);
+  }
+  .tl-step.done::before { background: var(--green); border-color: var(--green); }
+  .tl-step.running::before { background: var(--accent); border-color: var(--accent); animation: pulse 1s infinite; }
+  .tl-label { font-family: var(--mono); font-size: 0.68rem; color: var(--text-muted); }
+  .tl-step.done .tl-label { color: var(--text); }
+  .tl-time { font-family: var(--mono); font-size: 0.58rem; color: var(--text-dim); margin-top: 2px; }
+
+  /* Scenario tabs */
+  .scenario-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+  .sc-tab {
+    font-family: var(--mono); font-size: 0.65rem; padding: 8px 16px;
+    cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent;
+    text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.12s;
+  }
+  .sc-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .sc-tab:hover { color: var(--text); }
+
+  /* SVG Chart */
+  svg text { font-family: var(--mono); }
+
+  /* Fade in */
+  .page.active { animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="logo-block">
+      <div class="logo-name">N-BeMod</div>
+      <div class="logo-sub">Behavioural Models</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-item active" onclick="showPage('upload')">
+        <span class="nav-num">01</span> Upload &amp; DQ
+      </div>
+      <div class="nav-item" onclick="showPage('calibrate')">
+        <span class="nav-num">02</span> Calibrate
+      </div>
+      <div class="nav-item" onclick="showPage('results')">
+        <span class="nav-num">03</span> Run &amp; Results
+      </div>
+      <div class="nav-item" style="margin-top:1.5rem; opacity:0.4; cursor:not-allowed;">
+        <span class="nav-num">04</span> Backtesting
+      </div>
+      <div class="nav-item" style="opacity:0.4; cursor:not-allowed;">
+        <span class="nav-num">05</span> NMD Models
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div><span class="status-dot"></span><span class="status-label">API Online</span></div>
+      <div class="version-tag">v0.1.0 · MVP · prepay_curve</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="breadcrumb" id="breadcrumb"><span>Upload</span> &amp; Data Quality</div>
+      <div class="topbar-actions">
+        <button class="btn-ghost">↻ Refresh</button>
+        <button class="btn-primary">+ New Entity</button>
+      </div>
+    </div>
+
+    <!-- ══ PAGE 1: UPLOAD & DQ ══ -->
+    <div class="page active" id="page-upload">
+      <div style="padding:0 0 0.25rem">
+        <div class="page-title">Upload &amp; Data Quality</div>
+        <div class="page-sub">loans dataset → normalization → DQ checks → versioning</div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Left panel -->
+        <div>
+          <div class="panel">
+            <div class="panel-title">Entity &amp; Upload</div>
+            <div class="form-group">
+              <label class="form-label">Entity</label>
+              <select class="form-select">
+                <option>Banco Demo SA</option>
+                <option>Caja Regional Norte</option>
+                <option>+ New entity…</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">As-of Date</label>
+              <input class="form-input" type="text" value="2024-12-31">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dataset file</label>
+              <div class="upload-zone">
+                <div class="upload-icon">⬆</div>
+                <div class="upload-label">Drop CSV / Excel here<br>or click to browse</div>
+              </div>
+            </div>
+            <button class="btn-primary" style="width:100%;margin-top:0.5rem">Upload &amp; Process</button>
+          </div>
+
+          <!-- DQ summary mini -->
+          <div class="panel" style="margin-top:1rem">
+            <div class="panel-title">DQ Report — demo_loans.csv</div>
+            <div style="display:flex;gap:1rem;margin-bottom:1rem">
+              <div class="metric" style="flex:1">
+                <div class="metric-val">400</div>
+                <div class="metric-label">Rows</div>
+              </div>
+              <div class="metric" style="flex:1">
+                <div class="metric-val" style="color:var(--green)">18</div>
+                <div class="metric-label">OK Checks</div>
+              </div>
+              <div class="metric" style="flex:1">
+                <div class="metric-val" style="color:var(--amber)">2</div>
+                <div class="metric-label">Warnings</div>
+              </div>
+            </div>
+            <div class="dq-row">
+              <div class="dq-name">not_null_balance</div>
+              <div class="dq-bar-wrap"><div class="dq-bar ok" style="width:100%"></div></div>
+              <span class="badge ok">OK</span>
+            </div>
+            <div class="dq-row">
+              <div class="dq-name">balance_positive</div>
+              <div class="dq-bar-wrap"><div class="dq-bar ok" style="width:100%"></div></div>
+              <span class="badge ok">OK</span>
+            </div>
+            <div class="dq-row">
+              <div class="dq-name">rate_in_range</div>
+              <div class="dq-bar-wrap"><div class="dq-bar warn" style="width:70%"></div></div>
+              <span class="badge warn">WARN</span>
+            </div>
+            <div class="dq-row">
+              <div class="dq-name">no_duplicates</div>
+              <div class="dq-bar-wrap"><div class="dq-bar ok" style="width:100%"></div></div>
+              <span class="badge ok">OK</span>
+            </div>
+            <div class="dq-row">
+              <div class="dq-name">balance_outliers_iqr</div>
+              <div class="dq-bar-wrap"><div class="dq-bar warn" style="width:85%"></div></div>
+              <span class="badge warn">WARN</span>
+            </div>
+            <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem">
+              <span class="badge ok">OVERALL: OK</span>
+              <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text-dim)">2024-12-31T18:04:22Z</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right panel: dataset versions -->
+        <div class="panel">
+          <div class="panel-title">Dataset Versions</div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Source</th><th>As-of</th><th>Rows</th><th>Balance (€M)</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>demo_loans.csv</td>
+                <td class="muted">2024-12-31</td>
+                <td>400</td>
+                <td>€ 2,841M</td>
+                <td><span class="badge ok">OK</span></td>
+              </tr>
+              <tr>
+                <td>loans_Q3_2024.xlsx</td>
+                <td class="muted">2024-09-30</td>
+                <td>387</td>
+                <td>€ 2,703M</td>
+                <td><span class="badge ok">OK</span></td>
+              </tr>
+              <tr>
+                <td>loans_H1_2024.csv</td>
+                <td class="muted">2024-06-30</td>
+                <td>412</td>
+                <td>€ 2,616M</td>
+                <td><span class="badge warn">WARN</span></td>
+              </tr>
+              <tr>
+                <td>loans_Q1_2024.xlsx</td>
+                <td class="muted">2024-03-31</td>
+                <td>—</td>
+                <td>—</td>
+                <td><span class="badge ko">KO</span></td>
+              </tr>
+              <tr>
+                <td>loans_2023.csv</td>
+                <td class="muted">2023-12-31</td>
+                <td>395</td>
+                <td>€ 2,488M</td>
+                <td><span class="badge ok">OK</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PAGE 2: CALIBRATE ══ -->
+    <div class="page" id="page-calibrate">
+      <div>
+        <div class="page-title">Model Calibration</div>
+        <div class="page-sub">prepay_curve · simple_average CPR/SMM by segment · EBA-compliant versioning</div>
+      </div>
+
+      <div class="grid-2" style="margin-top:1.5rem">
+        <!-- Config panel -->
+        <div>
+          <div class="panel">
+            <div class="panel-title">Model Config</div>
+            <div class="form-group">
+              <label class="form-label">Dataset Version</label>
+              <select class="form-select">
+                <option>demo_loans.csv · 2024-12-31 [OK]</option>
+                <option>loans_Q3_2024.xlsx · 2024-09-30 [OK]</option>
+                <option>loans_H1_2024.csv · 2024-06-30 [WARN]</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Model Type</label>
+              <select class="form-select">
+                <option>prepay_curve — Simple Average CPR</option>
+                <option disabled>prepay_curve — Cohort (P1)</option>
+                <option disabled>prepay_survival — Weibull (P1)</option>
+                <option disabled>NMD — Core/Non-core (P1)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Curve Method</label>
+              <select class="form-select">
+                <option>simple_average</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Horizon (months)</label>
+              <input class="form-input" type="number" value="60">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Min Segment Size</label>
+              <input class="form-input" type="number" value="10">
+            </div>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+              <label class="form-label" style="margin:0">Smoothing</label>
+              <input type="checkbox" style="accent-color:var(--accent)">
+            </div>
+            <button class="btn-primary" style="width:100%" onclick="simulateCalibration()">▶ Launch Calibration</button>
+          </div>
+        </div>
+
+        <!-- Results panel -->
+        <div>
+          <!-- CPR chart -->
+          <div class="panel">
+            <div class="panel-title">CPR Curves by Segment</div>
+            <div class="chart-area" style="height:220px">
+              <svg width="100%" height="220" id="cpr-chart">
+                <!-- Grid lines -->
+                <line x1="60" y1="20" x2="580" y2="20" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="62" x2="580" y2="62" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="104" x2="580" y2="104" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="146" x2="580" y2="146" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="188" x2="580" y2="188" stroke="#1A1A1A" stroke-width="1"/>
+                <!-- Y axis labels -->
+                <text x="52" y="24" text-anchor="end" fill="#383838" font-size="9">40%</text>
+                <text x="52" y="66" text-anchor="end" fill="#383838" font-size="9">30%</text>
+                <text x="52" y="108" text-anchor="end" fill="#383838" font-size="9">20%</text>
+                <text x="52" y="150" text-anchor="end" fill="#383838" font-size="9">10%</text>
+                <text x="52" y="192" text-anchor="end" fill="#383838" font-size="9">0%</text>
+                <!-- Curves (5 segments) -->
+                <polyline points="60,188 100,172 140,156 180,145 220,138 260,133 300,130 340,128 380,127 420,127 460,126 500,126 540,126 580,126"
+                  fill="none" stroke="#00C2FF" stroke-width="1.5" opacity="0.9"/>
+                <polyline points="60,188 100,178 140,165 180,155 220,148 260,144 300,141 340,139 380,138 420,137 460,137 500,137 540,137 580,137"
+                  fill="none" stroke="#00E87A" stroke-width="1.5" opacity="0.8"/>
+                <polyline points="60,188 100,182 140,173 180,165 220,159 260,155 300,152 340,151 380,150 420,150 460,149 500,149 540,149 580,149"
+                  fill="none" stroke="#FFB800" stroke-width="1.5" opacity="0.8"/>
+                <polyline points="60,188 100,175 140,160 180,148 220,141 260,137 300,134 340,132 380,131 420,131 460,130 500,130 540,130 580,130"
+                  fill="none" stroke="#C87FFF" stroke-width="1.5" opacity="0.7"/>
+                <polyline points="60,188 100,184 140,178 180,172 220,168 260,165 300,163 340,162 380,161 420,161 460,160 500,160 540,160 580,160"
+                  fill="none" stroke="#FF8040" stroke-width="1.5" opacity="0.7"/>
+                <!-- X labels -->
+                <text x="60" y="210" text-anchor="middle" fill="#383838" font-size="9">0</text>
+                <text x="190" y="210" text-anchor="middle" fill="#383838" font-size="9">m12</text>
+                <text x="320" y="210" text-anchor="middle" fill="#383838" font-size="9">m24</text>
+                <text x="450" y="210" text-anchor="middle" fill="#383838" font-size="9">m36</text>
+                <text x="580" y="210" text-anchor="middle" fill="#383838" font-size="9">m60</text>
+                <!-- PSA 30m mark -->
+                <line x1="195" y1="20" x2="195" y2="188" stroke="#252525" stroke-width="1" stroke-dasharray="3,3"/>
+                <text x="198" y="35" fill="#303030" font-size="8">PSA ramp</text>
+              </svg>
+            </div>
+            <!-- Legend -->
+            <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.5rem">
+              <span style="font-family:var(--mono);font-size:0.6rem;color:#00C2FF">▬ PRIME</span>
+              <span style="font-family:var(--mono);font-size:0.6rem;color:#00E87A">▬ NEAR_PRIME</span>
+              <span style="font-family:var(--mono);font-size:0.6rem;color:#FFB800">▬ SUBPRIME</span>
+              <span style="font-family:var(--mono);font-size:0.6rem;color:#C87FFF">▬ BUY_TO_LET</span>
+              <span style="font-family:var(--mono);font-size:0.6rem;color:#FF8040">▬ FIRST_TIME_BUYER</span>
+            </div>
+          </div>
+
+          <!-- Segment metrics -->
+          <div class="seg-grid">
+            <div class="seg-card">
+              <div class="seg-name">Prime</div>
+              <div class="seg-cpr">18.4%</div>
+              <div class="seg-bal">CPR base · 89 contracts</div>
+            </div>
+            <div class="seg-card">
+              <div class="seg-name">Near Prime</div>
+              <div class="seg-cpr">14.2%</div>
+              <div class="seg-bal">CPR base · 76 contracts</div>
+            </div>
+            <div class="seg-card">
+              <div class="seg-name">Subprime</div>
+              <div class="seg-cpr">9.8%</div>
+              <div class="seg-bal">CPR base · 83 contracts</div>
+            </div>
+            <div class="seg-card">
+              <div class="seg-name">Buy-to-Let</div>
+              <div class="seg-cpr">16.1%</div>
+              <div class="seg-bal">CPR base · 71 contracts</div>
+            </div>
+            <div class="seg-card">
+              <div class="seg-name">First-Time</div>
+              <div class="seg-cpr">7.3%</div>
+              <div class="seg-bal">CPR base · 81 contracts</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model versions table -->
+      <div class="panel" style="margin-top:1.5rem">
+        <div class="panel-title">Model Version History</div>
+        <table class="data-table">
+          <thead>
+            <tr><th>Version ID</th><th>Dataset</th><th>Method</th><th>Horizon</th><th>Segments</th><th>Calibrated</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--accent);font-family:var(--mono);font-size:0.68rem">mv-3fa8…c21d</td>
+              <td class="muted">2024-12-31</td><td>simple_avg</td><td>60m</td><td>5</td>
+              <td class="muted">2025-01-02 11:34</td>
+              <td><span class="badge ok">SUCCEEDED</span></td>
+            </tr>
+            <tr>
+              <td style="color:var(--accent);font-family:var(--mono);font-size:0.68rem">mv-2bc1…a90f</td>
+              <td class="muted">2024-09-30</td><td>simple_avg</td><td>120m</td><td>5</td>
+              <td class="muted">2024-10-04 09:12</td>
+              <td><span class="badge ok">SUCCEEDED</span></td>
+            </tr>
+            <tr>
+              <td style="color:var(--accent);font-family:var(--mono);font-size:0.68rem">mv-1aa4…f03e</td>
+              <td class="muted">2024-06-30</td><td>simple_avg</td><td>60m</td><td>4</td>
+              <td class="muted">2024-07-01 14:55</td>
+              <td><span class="badge queued">RUNNING</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ PAGE 3: RUN & RESULTS ══ -->
+    <div class="page" id="page-results">
+      <div>
+        <div class="page-title">Scenario Run &amp; Results</div>
+        <div class="page-sub">execute · monthly cashflows · export to Excel</div>
+      </div>
+
+      <!-- Top metrics -->
+      <div class="grid-4">
+        <div class="metric">
+          <div class="metric-val">€ 284M</div>
+          <div class="metric-label">Total Prepayment</div>
+          <div class="metric-delta">60-month horizon</div>
+        </div>
+        <div class="metric">
+          <div class="metric-val">13.2%</div>
+          <div class="metric-label">Avg CPR</div>
+          <div class="metric-delta">across 5 segments</div>
+        </div>
+        <div class="metric">
+          <div class="metric-val">€ 2,557M</div>
+          <div class="metric-label">Closing Balance m60</div>
+          <div class="metric-delta">from € 2,841M initial</div>
+        </div>
+        <div class="metric">
+          <div class="metric-val">5</div>
+          <div class="metric-label">Segments</div>
+          <div class="metric-delta">Base scenario</div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:1.5rem">
+        <!-- Left: run config + timeline -->
+        <div>
+          <div class="panel">
+            <div class="panel-title">New Run</div>
+            <div class="form-group">
+              <label class="form-label">Model Version</label>
+              <select class="form-select">
+                <option>mv-3fa8…c21d · 2024-12-31 · 60m [SUCCEEDED]</option>
+                <option>mv-2bc1…a90f · 2024-09-30 · 120m [SUCCEEDED]</option>
+              </select>
+            </div>
+
+            <div class="scenario-tabs">
+              <div class="sc-tab active">Base</div>
+              <div class="sc-tab">Shock +100</div>
+              <div class="sc-tab">Shock −100</div>
+            </div>
+
+            <div style="background:var(--bg-3);border:1px solid var(--border);padding:0.75rem;margin-bottom:1rem;font-family:var(--mono);font-size:0.65rem;color:var(--text-muted)">
+              rate_shock_bps: 0<br>scenario: Base (no shock applied to prepay curve in MVP)
+            </div>
+
+            <button class="btn-primary" style="width:100%">▶ Execute Run</button>
+          </div>
+
+          <div class="panel" style="margin-top:1rem">
+            <div class="panel-title">Run Status</div>
+            <div class="timeline">
+              <div class="tl-step done">
+                <div class="tl-label">Dataset loaded (400 rows)</div>
+                <div class="tl-time">11:34:02Z</div>
+              </div>
+              <div class="tl-step done">
+                <div class="tl-label">Curves loaded (5 segments)</div>
+                <div class="tl-time">11:34:03Z</div>
+              </div>
+              <div class="tl-step done">
+                <div class="tl-label">Cashflows computed (300 rows)</div>
+                <div class="tl-time">11:34:04Z</div>
+              </div>
+              <div class="tl-step done">
+                <div class="tl-label">Excel export built</div>
+                <div class="tl-time">11:34:04Z</div>
+              </div>
+              <div class="tl-step done">
+                <div class="tl-label">Artifacts registered in DB</div>
+                <div class="tl-time">11:34:05Z</div>
+              </div>
+            </div>
+            <div style="margin-top:1rem">
+              <span class="badge ok">SUCCEEDED</span>
+              <span style="font-family:var(--mono);font-size:0.6rem;color:var(--text-dim);margin-left:0.75rem">run_id: run-9f2e…b44a</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: cashflow chart -->
+        <div>
+          <div class="panel">
+            <div class="panel-title">Monthly Cashflows — Opening vs Closing Balance (€M)</div>
+            <div class="chart-area" style="height:260px">
+              <svg width="100%" height="260" viewBox="0 0 600 260" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="balGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#00C2FF" stop-opacity="0.15"/>
+                    <stop offset="100%" stop-color="#00C2FF" stop-opacity="0"/>
+                  </linearGradient>
+                  <linearGradient id="prepGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#00E87A" stop-opacity="0.4"/>
+                    <stop offset="100%" stop-color="#00E87A" stop-opacity="0.05"/>
+                  </linearGradient>
+                </defs>
+                <!-- Grid -->
+                <line x1="60" y1="20" x2="570" y2="20" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="75" x2="570" y2="75" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="130" x2="570" y2="130" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="185" x2="570" y2="185" stroke="#1A1A1A" stroke-width="1"/>
+                <line x1="60" y1="235" x2="570" y2="235" stroke="#1A1A1A" stroke-width="1"/>
+                <!-- Y axis -->
+                <text x="52" y="24" text-anchor="end" fill="#383838" font-size="9">3,000</text>
+                <text x="52" y="79" text-anchor="end" fill="#383838" font-size="9">2,500</text>
+                <text x="52" y="134" text-anchor="end" fill="#383838" font-size="9">2,000</text>
+                <text x="52" y="189" text-anchor="end" fill="#383838" font-size="9">1,500</text>
+                <text x="52" y="239" text-anchor="end" fill="#383838" font-size="9">1,000</text>
+                <!-- Balance curve fill -->
+                <polygon points="60,29 110,33 170,39 230,47 290,56 350,66 410,78 470,91 530,105 570,114 570,235 60,235"
+                  fill="url(#balGrad)"/>
+                <!-- Balance line -->
+                <polyline points="60,29 110,33 170,39 230,47 290,56 350,66 410,78 470,91 530,105 570,114"
+                  fill="none" stroke="#00C2FF" stroke-width="2"/>
+                <!-- Prepayment bars (simplified, as thin vertical green marks) -->
+                <rect x="62" y="220" width="7" height="15" fill="#00E87A" opacity="0.6" rx="1"/>
+                <rect x="115" y="218" width="7" height="17" fill="#00E87A" opacity="0.6" rx="1"/>
+                <rect x="175" y="216" width="7" height="19" fill="#00E87A" opacity="0.6" rx="1"/>
+                <rect x="235" y="214" width="7" height="21" fill="#00E87A" opacity="0.6" rx="1"/>
+                <rect x="295" y="213" width="7" height="22" fill="#00E87A" opacity="0.55" rx="1"/>
+                <rect x="355" y="212" width="7" height="23" fill="#00E87A" opacity="0.5" rx="1"/>
+                <rect x="415" y="211" width="7" height="24" fill="#00E87A" opacity="0.45" rx="1"/>
+                <rect x="475" y="211" width="7" height="24" fill="#00E87A" opacity="0.4" rx="1"/>
+                <rect x="535" y="210" width="7" height="25" fill="#00E87A" opacity="0.35" rx="1"/>
+                <!-- X labels -->
+                <text x="60" y="252" text-anchor="middle" fill="#383838" font-size="9">m0</text>
+                <text x="170" y="252" text-anchor="middle" fill="#383838" font-size="9">m12</text>
+                <text x="290" y="252" text-anchor="middle" fill="#383838" font-size="9">m24</text>
+                <text x="410" y="252" text-anchor="middle" fill="#383838" font-size="9">m36</text>
+                <text x="530" y="252" text-anchor="middle" fill="#383838" font-size="9">m48</text>
+                <text x="570" y="252" text-anchor="middle" fill="#383838" font-size="9">m60</text>
+              </svg>
+            </div>
+            <div style="display:flex;gap:1.5rem;margin-top:0.5rem">
+              <span style="font-family:var(--mono);font-size:0.6rem;color:#00C2FF">▬ Closing Balance (€M)</span>
+              <span style="font-family:var(--mono);font-size:0.6rem;color:#00E87A">▬ Prepayment (€M)</span>
+            </div>
+          </div>
+
+          <!-- Download -->
+          <div class="panel" style="margin-top:1rem;border-color:var(--accent-dim2);cursor:pointer" onclick="alert('Download triggered: export.xlsx')">
+            <div style="display:flex;align-items:center;gap:1rem">
+              <div style="font-size:1.5rem;opacity:0.7">⬇</div>
+              <div>
+                <div style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);font-weight:600">Download Excel Export</div>
+                <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text-muted);margin-top:2px">curves · cashflows · metadata · run_id: run-9f2e…b44a</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const pages = { upload: 'page-upload', calibrate: 'page-calibrate', results: 'page-results' };
+  const breadcrumbs = {
+    upload: '<span>Upload</span> &amp; Data Quality',
+    calibrate: '<span>Model</span> Calibration',
+    results: '<span>Scenario Run</span> &amp; Results'
+  };
+
+  function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(pages[name]).classList.add('active');
+    document.querySelectorAll('.nav-item')[['upload','calibrate','results'].indexOf(name)].classList.add('active');
+    document.getElementById('breadcrumb').innerHTML = breadcrumbs[name];
+  }
+
+  function simulateCalibration() {
+    const btn = event.target;
+    btn.textContent = '⏳ Calibrating...';
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = '✓ Calibration complete';
+      btn.style.background = '#00E87A';
+      btn.style.color = '#000';
+    }, 2000);
+  }
+
+  // Scenario tabs
+  document.querySelectorAll('.sc-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.sc-tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

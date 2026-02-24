@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nbemod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nbemod_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-nbemod}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nbemod"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-nbemod_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-nbemod_secret_minio}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./api:/app/api
+      - ./models:/app/models
+      - ./storage:/app/storage
+      - ./db:/app/db
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./api:/app/api
+      - ./worker:/app/worker
+      - ./models:/app/models
+      - ./storage:/app/storage
+      - ./db:/app/db
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=2
+
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    env_file: .env
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    volumes:
+      - ./ui:/app/ui
+    command: streamlit run ui/app.py --server.port=8501 --server.address=0.0.0.0
+
+volumes:
+  postgres_data:
+  minio_data:
