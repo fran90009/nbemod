@@ -169,10 +169,9 @@ with st.sidebar:
 
     page = st.selectbox(
         "MODULE",
-        ["01 · Upload & Data Quality", "02 · Calibrate", "03 · Run & Results"],
+        ["01 · Upload & DQ", "02 · Calibrate", "03 · Run & Results", "04 · Backtesting"],
         label_visibility="visible"
     )
-
     st.markdown("---")
     health = api_get("/health")
     api_status = "● ONLINE" if health else "● OFFLINE"
@@ -435,3 +434,81 @@ elif page == "03 · Run & Results":
 
         if st.button("↻ Refresh"):
             st.rerun()
+elif page == "04 · Backtesting":
+    st.markdown("## Backtesting & Model Validation")
+    st.markdown('<div class="mono">rolling validation · MAPE · WAPE · segment performance</div>', unsafe_allow_html=True)
+    st.markdown("---")
+
+    col1, col2 = st.columns([1, 1.5], gap="large")
+
+    with col1:
+        st.markdown("### MODEL VERSION")
+        mvs = api_get("/models/versions") or []
+        succeeded_mvs = [m for m in mvs if m["status"] == "SUCCEEDED"]
+
+        if not succeeded_mvs:
+            st.warning("No succeeded model versions. Calibrate a model first.")
+        else:
+            mv_opts = {f"mv · {m['id'][:16]}… | {m['params_json'].get('horizon_months', '?')}m": m["id"] for m in succeeded_mvs}
+            sel_mv_label = st.selectbox("Select Model Version", list(mv_opts.keys()))
+            sel_mv_id = mv_opts[sel_mv_label]
+
+            st.markdown("### CONFIG")
+            noise_std = st.slider("Noise std (simulation)", 0.01, 0.10, 0.02, step=0.01,
+                                  help="Desviación estándar del ruido simulado. En producción: datos reales.")
+
+            if st.button("▶ Run Backtesting"):
+                with st.spinner("Running backtesting..."):
+                    try:
+                        r = requests.post(f"{API}/backtesting/run", json={
+                            "model_version_id": sel_mv_id,
+                            "noise_std": noise_std,
+                        })
+                        if r.status_code == 200:
+                            result = r.json()
+                            st.session_state["bt_result"] = result
+                            st.success("✓ Backtesting complete")
+                        else:
+                            st.error(r.text)
+                    except Exception as e:
+                        st.error(str(e))
+
+    with col2:
+        st.markdown("### RESULTS")
+
+        if "bt_result" in st.session_state:
+            result = st.session_state["bt_result"]
+            gm = result["global_metrics"]
+            sm = result["segment_metrics"]
+
+            # Global metrics
+            m1, m2, m3 = st.columns(3)
+            mape_color = "normal" if gm["mape"] < 10 else "inverse"
+            m1.metric("Global MAPE", f"{gm['mape']:.2f}%")
+            m2.metric("Global WAPE", f"{gm['wape']:.2f}%")
+            m3.metric("Segments", gm["total_segments"])
+
+            # Interpretation
+            interp = gm.get("interpretation", "")
+            color = "#00E87A" if "EXCELLENT" in interp else "#FFB800" if "GOOD" in interp else "#FF4444"
+            st.markdown(f'<div style="font-family:var(--mono);font-size:0.75rem;color:{color};margin:0.5rem 0">{interp}</div>', unsafe_allow_html=True)
+
+            st.markdown("---")
+
+            # Segment metrics table
+            st.markdown("### SEGMENT BREAKDOWN")
+            seg_rows = []
+            for seg, metrics in sm.items():
+                seg_rows.append({
+                    "Segment": seg,
+                    "MAPE (%)": round(metrics["mape"], 2),
+                    "WAPE (%)": round(metrics["wape"], 2),
+                    "CPR Predicted": f"{metrics['avg_cpr_predicted']:.2%}",
+                    "CPR Observed": f"{metrics['avg_cpr_observed']:.2%}",
+                    "Balance (€)": f"{metrics['balance']:,.0f}",
+                })
+            seg_df = pd.DataFrame(seg_rows)
+            st.dataframe(seg_df, use_container_width=True, hide_index=True)
+
+        else:
+            st.markdown('<div class="panel mono">Run backtesting to see results.</div>', unsafe_allow_html=True)

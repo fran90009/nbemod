@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import health, entities, datasets, models, runs
+from api.routers import health, entities, datasets, models, runs, backtesting
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,3 +32,4 @@ app.include_router(entities.router, prefix="/entities", tags=["Entities"])
 app.include_router(datasets.router, prefix="/datasets", tags=["Datasets"])
 app.include_router(models.router, prefix="/models", tags=["Models"])
 app.include_router(runs.router, prefix="/runs", tags=["Runs"])
+app.include_router(backtesting.router, prefix="/backtesting", tags=["Backtesting"])
