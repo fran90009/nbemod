@@ -121,16 +121,18 @@ def task_calibrate_prepay_curve(self, model_version_id: str):
             entity_id = str(dv.entity_id)
             asof = str(dv.as_of_date)
             config = mv.params_json
+            curated_path = dv.curated_path
+            dv_id = str(dv.id)
 
-            parquet_bytes = minio.download_bytes(dv.curated_path)
+            parquet_bytes = minio.download_bytes(curated_path)
             df = pd.read_parquet(io.BytesIO(parquet_bytes))
 
             curves_df, metrics = calibrate_simple_average(df, config, rate_shock_bps=0)
 
-            curves_p = minio.model_curves_path(entity_id, asof, str(dv.id), model_version_id, "prepay_curve")
+            curves_p = minio.model_curves_path(entity_id, asof, dv_id, model_version_id, "prepay_curve")
             minio.upload_bytes(curves_df.to_parquet(index=False), curves_p)
 
-            params_p = minio.model_params_path(entity_id, asof, str(dv.id), model_version_id, "prepay_curve")
+            params_p = minio.model_params_path(entity_id, asof, dv_id, model_version_id, "prepay_curve")
             minio.upload_json({**config, "metrics": metrics, "calibrated_at": str(datetime.utcnow())}, params_p)
 
             mv.status = "SUCCEEDED"
@@ -158,50 +160,60 @@ def task_run_cashflows(self, run_id: str):
         run.started_at = datetime.utcnow()
 
     try:
+        # Extraer todos los datos necesarios dentro de la sesión
         with db_session() as db:
             run = db.query(ScenarioRun).filter(ScenarioRun.id == run_id).first()
             mv = run.model_version
             dv = mv.dataset_version
             scenario = run.scenario_definition
+
+            # Extraer valores primitivos antes de cerrar la sesión
             entity_id = str(dv.entity_id)
             asof = str(dv.as_of_date)
-
+            config = dict(mv.params_json)
+            curated_path = str(dv.curated_path)
+            mv_id = str(mv.id)
+            dv_id = str(dv.id)
+            scenario_name = str(scenario.name)
             rate_shock_bps = int(scenario.definition_json.get("rate_shock_bps", 0))
-            logger.info(f"Scenario: {scenario.name} | rate_shock_bps={rate_shock_bps}")
 
-            loan_bytes = minio.download_bytes(dv.curated_path)
-            loans_df = pd.read_parquet(io.BytesIO(loan_bytes))
-            config = mv.params_json
+        logger.info(f"Scenario: {scenario_name} | rate_shock_bps={rate_shock_bps}")
 
-            curves_df, scenario_metrics = calibrate_simple_average(
-                loans_df, config, rate_shock_bps=rate_shock_bps
-            )
+        # Procesar fuera de la sesión DB
+        loan_bytes = minio.download_bytes(curated_path)
+        loans_df = pd.read_parquet(io.BytesIO(loan_bytes))
 
-            cashflows_df = compute_cashflows(loans_df, curves_df, config)
+        curves_df, scenario_metrics = calibrate_simple_average(
+            loans_df, config, rate_shock_bps=rate_shock_bps
+        )
 
-            cf_path = minio.run_cashflows_path(entity_id, asof, str(dv.id), str(mv.id), "prepay_curve", run_id)
-            minio.upload_bytes(cashflows_df.to_parquet(index=False), cf_path)
+        cashflows_df = compute_cashflows(loans_df, curves_df, config)
 
-            excel_path = minio.run_excel_path(entity_id, asof, str(dv.id), str(mv.id), "prepay_curve", run_id)
-            excel_bytes = build_excel(curves_df, cashflows_df, {
-                **config,
-                "scenario": scenario.name,
-                "rate_shock_bps": rate_shock_bps,
-            }, run_id)
-            minio.upload_bytes(
-                excel_bytes, excel_path,
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        cf_path = minio.run_cashflows_path(entity_id, asof, dv_id, mv_id, "prepay_curve", run_id)
+        minio.upload_bytes(cashflows_df.to_parquet(index=False), cf_path)
 
-            summary = {
-                "scenario": scenario.name,
-                "rate_shock_bps": rate_shock_bps,
-                "total_prepayment": float(cashflows_df["prepayment"].sum()),
-                "avg_cpr": float(curves_df["cpr"].mean()),
-                "segments": int(curves_df["segment"].nunique()),
-                "months": int(cashflows_df["month"].max()),
-            }
+        excel_path = minio.run_excel_path(entity_id, asof, dv_id, mv_id, "prepay_curve", run_id)
+        excel_bytes = build_excel(curves_df, cashflows_df, {
+            **config,
+            "scenario": scenario_name,
+            "rate_shock_bps": rate_shock_bps,
+        }, run_id)
+        minio.upload_bytes(
+            excel_bytes, excel_path,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
+        summary = {
+            "scenario": scenario_name,
+            "rate_shock_bps": rate_shock_bps,
+            "total_prepayment": float(cashflows_df["prepayment"].sum()),
+            "avg_cpr": float(curves_df["cpr"].mean()),
+            "segments": int(curves_df["segment"].nunique()),
+            "months": int(cashflows_df["month"].max()),
+        }
+
+        # Guardar resultados en nueva sesión
+        with db_session() as db:
             for artifact_type, path in [("cashflows", cf_path), ("excel", excel_path)]:
                 ra = ResultArtifact(
                     scenario_run_id=run_id,
@@ -211,10 +223,11 @@ def task_run_cashflows(self, run_id: str):
                 )
                 db.add(ra)
 
+            run = db.query(ScenarioRun).filter(ScenarioRun.id == run_id).first()
             run.status = "SUCCEEDED"
             run.finished_at = datetime.utcnow()
 
-        logger.info(f"[TASK run_cashflows] DONE | run_id={run_id} | scenario={scenario.name} | shock={rate_shock_bps}bps")
+        logger.info(f"[TASK run_cashflows] DONE | run_id={run_id} | scenario={scenario_name} | shock={rate_shock_bps}bps")
 
     except Exception as e:
         logger.exception(f"[TASK run_cashflows] FAILED | run_id={run_id}")
